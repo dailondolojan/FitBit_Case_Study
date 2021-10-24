@@ -1,0 +1,341 @@
+---
+title: "FitBit Case Study"
+author: Dailon Dolojan
+date: 10/11/2021
+output: html_notebook
+---
+
+
+
+# Installing Packages
+```{r}
+install.packages("tidyverse")
+install.packages("skimr")
+install.packages("janitor")
+install.packages("lubridate")
+install.packages("hms")
+install.packages("VennDiagram")
+install.packages("ggplot2")
+```
+# Loading Packages
+```{r}
+library(tidyverse)
+library(skimr)
+library(janitor)
+library(lubridate)
+library(hms)
+library(VennDiagram)
+library(ggplot2)
+```
+# Setting Working Directory to Load CSV
+```{r}
+setwd("/Users/dailondolojan/Documents/Projects/FitBit_Case_Study/Fitbit_Data")
+```
+
+# Loading CSV files into Dataframes
+
+```{r}
+daily_activity_df <- read_csv("dailyActivity_merged.csv")
+daily_calories_df <- read_csv("dailyCalories_merged.csv")
+daily_intensities_df <- read_csv("dailyIntensities_merged.csv")
+daily_steps_df <- read_csv("dailySteps_merged.csv")
+hourly_calories_df <- read_csv("hourlyCalories_merged.csv")
+hourly_intensities_df <- read_csv("hourlyIntensities_merged.csv")
+hourly_steps_df <- read_csv("hourlySteps_merged.csv")
+sleep_day_df <- read_csv("sleepDay_merged.csv")
+heart_rate_df <- read_csv("heartrate_seconds_merged.csv")
+weight_log_df <- read_csv("weightLogInfo_merged.csv")
+```
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# Cleaning Data
+
+Create a list of all DataFrames to apply various cleaning functions
+
+```{r}
+df_list <- list(daily_activity_df, daily_calories_df, daily_intensities_df,
+                daily_steps_df, heart_rate_df, hourly_calories_df,
+                hourly_intensities_df, hourly_steps_df, sleep_day_df,
+                weight_log_df)
+```
+
+# Finding Missing Values:
+Lambda function to find the sum of missing values within each dataframe
+```{r}
+lapply(df_list,function(x) { length(which(is.na(x)))})
+```
+
+We determined that weight_log_df has 65 missing values. We apply the 
+"length(which(is.na(x)))" to determine how many missing values are in each 
+column
+
+```{r}
+lapply(weight_log_df,function(x) { length(which(is.na(x)))})
+```
+
+
+
+The missing values are only found in the Fat column. A possible explanation
+is that individuals may not be equiped to measure their Fat percentage.
+Thus leaving participants to enter no data for Fat percentage.
+
+```{r}
+weight_log_nas <- filter(weight_log_df, is.na(Fat)) 
+```
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+# Duplicates
+To filter duplicates, we will use a lambda function to group each record by ID
+applying a lambda function to obtain only distinct values
+
+```{r}
+lapply(df_list,function(x) {distinct(x,x$Id, .keep_all = TRUE)})
+```
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+# Reformatting
+
+Converting the list of dataframes into separate dataframes using list2env
+
+```{r}
+names(df_list) <- paste("df", seq_along(df_list), sep = ".")
+list2env(df_list,envir=.GlobalEnv)
+```
+
+```{r}
+daily_activity <- df.1
+daily_calories <- df.2
+daily_intensities <- df.3
+daily_steps <- df.4
+heart_rate <- df.5
+hourly_calories <- df.6
+hourly_intensities <- df.7
+hourly_steps <- df.8
+sleep_day <- df.9
+weight_log <- df.10
+
+rm(df.1,df.2,df.3,df.4,df.5,df.6,df.7,df.8,df.9,df.10)
+```
+
+Renaming ActivityDate column of daily_activity to ActivityDay to maintain 
+naming consistency of within all daily datasets
+
+```{r}
+daily_activity <- daily_activity %>% rename(ActivityDay = ActivityDate)
+```
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+# Joining all daily data
+```{r}
+daily <- merge(merge(merge(
+  daily_activity,
+  daily_calories, all=TRUE),
+  daily_intensities, all=TRUE),
+  daily_steps, all=TRUE)
+```
+
+
+
+# Joining all hourly data
+
+```{r}
+hourly <- merge(merge(
+  hourly_calories,
+  hourly_intensities, all=TRUE),
+  hourly_steps, all=TRUE)
+```
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+Converting daily$ActivityDay and hourly$ActivityHour from chr to datetime &
+hms and deleting unnecessary columns
+```{r}
+daily <- daily %>%
+  mutate(Date = mdy(ActivityDay)) %>%
+  mutate(DayOfWeek = weekdays(Date)) %>%
+  select(-"ActivityDay",-"TrackerDistance",-"StepTotal")
+
+daily <- daily[, c(1,14,15,2:13)]
+```
+
+```{r}
+hourly <- hourly %>%
+  mutate(Activity_Hour = mdy_hms(ActivityHour)) %>%
+  mutate(DayOfWeek = weekdays(Activity_Hour)) %>%
+  separate(Activity_Hour, into = c("date_str","time_str"), sep = " ") %>%
+  mutate(Date = ymd(date_str)) %>%
+  mutate(Time = as_hms(time_str)) %>%
+  select(-"ActivityHour", -"date_str", -"time_str")
+
+hourly <- hourly[, c(1,7,6,8,2:5)]
+```
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+#Converting Datetime for heart_rate, sleep_day, and weight_log
+```{r}
+heart_rate <- heart_rate %>%
+  mutate(Activity_Hour = mdy_hms(Time)) %>%
+  mutate(DayOfWeek = weekdays(Activity_Hour)) %>%
+  separate(Activity_Hour, into = c("date_str","time_str"), sep = " ") %>%
+  mutate(Date = ymd(date_str)) %>%
+  mutate(Time = as_hms(time_str)) %>%
+  select(-"date_str",-"time_str")
+  
+heart_rate <- heart_rate[, c(1, 5, 4, 2:3)]
+```
+
+```{r}
+sleep_day <- sleep_day %>%
+  mutate(Activity_Hour = mdy_hms(SleepDay)) %>%
+  mutate(DayOfWeek = weekdays(Activity_Hour)) %>%
+  mutate(Date = ymd(Activity_Hour)) %>%
+  select(-"Activity_Hour", -"SleepDay")
+
+sleep_day <- sleep_day[, c(1, 6, 5, 4, 2:3)]
+```
+
+```{r}
+weight_log <- weight_log %>%
+  mutate(Activity_Hour = mdy_hms(Date)) %>%
+  mutate(DayOfWeek = weekdays(Activity_Hour)) %>%
+  separate(Activity_Hour, into = c("date_str","time_str"), sep = " ") %>%
+  mutate(Date = ymd(date_str)) %>%
+  mutate(Time = as_hms(time_str)) %>%
+  select(-"date_str",-"time_str")
+
+weight_log <- weight_log[, c(1, 2, 9, 10, 3:8)]
+```
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+#Data Exploration
+Determine summary stats of every dataframe
+
+```{r}
+daily_summary <- daily %>%
+  select(-"Id",-"Date",-"DayOfWeek") %>%
+  summary() 
+print(daily_summary)
+print(n_unique(daily$Id))
+```
+
+```{r}
+hourly_summary <- hourly %>%
+  select(-"Id",-"Date",-"DayOfWeek", -"Time") %>%
+  summary() 
+print(hourly_summary)
+print(n_unique(hourly$Id))
+```
+
+```{r}
+heart_rate_summary <- heart_rate %>%
+  select("Value") %>%
+  summary() 
+print(heart_rate_summary)
+print(n_unique(heart_rate$Id))
+```
+
+```{r}
+sleep_day_summary <- sleep_day %>%
+  select(-"Id",-"Date",-"DayOfWeek") %>%
+  summary() 
+print(sleep_day_summary)
+print(n_unique(sleep_day$Id))
+```
+
+```{r}
+weight_log_summary <- weight_log %>%
+  select(-"Id",-"Date",-"DayOfWeek", - "Time", -"IsManualReport") %>%
+  summary() 
+print(weight_log_summary)
+print(n_unique(weight_log$Id))
+```
+
+#Determining what users are using
+Generate 4 sets of unique Ids for each feature.
+
+```{r}
+step_ids <- unique(daily$Id, incomparables = FALSE)
+sleep_ids <- unique(sleep_day$Id, incomparables = FALSE)
+heartrate_ids <- unique(heart_rate$Id, incomparables = FALSE)
+weight_ids <- unique(weight_log$Id, incomparables = FALSE)
+```
+# Plot
+```{r}
+venn.diagram(x = list(step_ids, sleep_ids, heartrate_ids, weight_ids), 
+             category.names = c("Steps count", "Sleep monitor", "Heart monitor",
+                                "Weight tracking"),
+             filename = "features_venn.png",
+             output=TRUE, imagetype="png",
+             lwd = 2, fill = c("skyblue", "pink1", "mediumorchid", "orange"),
+             cex = 1, fontface = "bold", fontfamily = "sans",
+             cat.cex = .7, cat.fontface = "bold", cat.default.pos = "outer",
+             cat.fontfamily = "sans")
+```
+
+From our Venn Diagram, we can identify that all 33 users from the study 
+implement the step counting feature and is by far the most popular feature 
+based on the current dataset. The sleep mon
+
+# Creating Histograms of Daily Activity
+
+Relationship of how many steps you take a day vs how many mintues you spend sitting
+```{r}
+ggplot(data=daily, aes(x=TotalSteps, y=SedentaryMinutes)) + geom_point()
+```
+
+Relationship of how many minutes you're asleep vs how many minutes you're in bed
+```{r}
+ggplot(data=sleep_day, aes(x=TotalMinutesAsleep, y=TotalTimeInBed)) + geom_point()
+```
+
+# Daily plots
+Relationship with calories & Activity
+```{r}
+ggplot(data=daily, aes(x=TotalSteps, y=SedentaryMinutes)) + geom_point()
+```
+
+
+
+ggplot(data=daily, aes(x=VeryActiveDistance)) + geom_histogram()
+# Relationship with calories & steps
+# Relationship with calories & Day of the week
+# Relationship with Activity & Day of the week
+# Relationship with Activity & Minutes Spent
+# Difference with Activity distances & Minutes
+
+#Hourly plots
+# Time & DAY vs Total Intensity or Step Total or Average Intensity
+# Relationship with heart rate by the hour
+
+#Sleep Day
+# Relationship of DayOfWeek with Total TimeInBed and TotalMinutesAsleep
+# Relationship of TotalSleepRecords
+# Relationship of sleep & activities
+# Relaitonship of sleep & calorie usage
+
+# Weight_log
+# Weight and usage
+# Weight and activity
+# Weight and calories
+
+
+
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+

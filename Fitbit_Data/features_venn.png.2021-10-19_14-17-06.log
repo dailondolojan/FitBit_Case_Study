@@ -1,0 +1,42 @@
+INFO [2021-10-19 14:17:06] $x
+INFO [2021-10-19 14:17:06] list(step_ids, sleep_ids, heartrate_ids, weight_ids)
+INFO [2021-10-19 14:17:06] 
+INFO [2021-10-19 14:17:06] $category.names
+INFO [2021-10-19 14:17:06] c("Step counter", "Sleep monitor", "Heart monitor", "Weight tracker")
+INFO [2021-10-19 14:17:06] 
+INFO [2021-10-19 14:17:06] $filename
+INFO [2021-10-19 14:17:06] [1] "features_venn.png"
+INFO [2021-10-19 14:17:06] 
+INFO [2021-10-19 14:17:06] $output
+INFO [2021-10-19 14:17:06] [1] TRUE
+INFO [2021-10-19 14:17:06] 
+INFO [2021-10-19 14:17:06] $imagetype
+INFO [2021-10-19 14:17:06] [1] "png"
+INFO [2021-10-19 14:17:06] 
+INFO [2021-10-19 14:17:06] $lwd
+INFO [2021-10-19 14:17:06] [1] 2
+INFO [2021-10-19 14:17:06] 
+INFO [2021-10-19 14:17:06] $fill
+INFO [2021-10-19 14:17:06] c("skyblue", "pink1", "mediumorchid", "orange")
+INFO [2021-10-19 14:17:06] 
+INFO [2021-10-19 14:17:06] $cex
+INFO [2021-10-19 14:17:06] [1] 1
+INFO [2021-10-19 14:17:06] 
+INFO [2021-10-19 14:17:06] $fontface
+INFO [2021-10-19 14:17:06] [1] "bold"
+INFO [2021-10-19 14:17:06] 
+INFO [2021-10-19 14:17:06] $fontfamily
+INFO [2021-10-19 14:17:06] [1] "sans"
+INFO [2021-10-19 14:17:06] 
+INFO [2021-10-19 14:17:06] $cat.cex
+INFO [2021-10-19 14:17:06] [1] 0.7
+INFO [2021-10-19 14:17:06] 
+INFO [2021-10-19 14:17:06] $cat.fontface
+INFO [2021-10-19 14:17:06] [1] "bold"
+INFO [2021-10-19 14:17:06] 
+INFO [2021-10-19 14:17:06] $cat.default.pos
+INFO [2021-10-19 14:17:06] [1] "outer"
+INFO [2021-10-19 14:17:06] 
+INFO [2021-10-19 14:17:06] $cat.fontfamily
+INFO [2021-10-19 14:17:06] [1] "sans"
+INFO [2021-10-19 14:17:06] 

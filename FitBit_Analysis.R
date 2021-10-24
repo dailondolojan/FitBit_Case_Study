@@ -1,0 +1,603 @@
+install.packages("tidyverse")
+install.packages("skimr", "/home/user/anaconda3/lib/R/library")
+install.packages("janitor")
+install.packages("lubridate")
+install.packages("hms")
+install.packages("VennDiagram")
+install.packages("ggplot2")
+install.packages("dplyr")
+install.packages("plyr")
+install.packages("openair")
+install.packages("formattable")
+install.packages("ggpubr")
+install.packages("IRdisplay") 
+install.packages("DataExplorer") #install
+library(tidyverse)
+library(skimr)
+library(janitor)
+library(lubridate)
+library(hms)
+library(VennDiagram)
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(openair)
+library(formattable)
+library(ggpubr)
+library(IRdisplay)
+library(DataExplorer)
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+# Setting Working Directory to Load CSV
+setwd("/Users/dailondolojan/Documents/Projects/FitBit_Case_Study/Fitbit_Data")
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# Loading CSV files into Dataframes
+
+daily_activity_df <- read_csv("dailyActivity_merged.csv")
+daily_calories_df <- read_csv("dailyCalories_merged.csv")
+daily_intensities_df <- read_csv("dailyIntensities_merged.csv")
+daily_steps_df <- read_csv("dailySteps_merged.csv")
+hourly_calories_df <- read_csv("hourlyCalories_merged.csv")
+hourly_intensities_df <- read_csv("hourlyIntensities_merged.csv")
+hourly_steps_df <- read_csv("hourlySteps_merged.csv")
+sleep_day_df <- read_csv("sleepDay_merged.csv")
+heart_rate_df <- read_csv("heartrate_seconds_merged.csv")
+weight_log_df <- read_csv("weightLogInfo_merged.csv")
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# Cleaning Data
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+# Create a list of all DataFrames to apply various cleaning functions
+df_list <- list(daily_activity_df, daily_calories_df, daily_intensities_df,
+                daily_steps_df, heart_rate_df, hourly_calories_df,
+                hourly_intensities_df, hourly_steps_df, sleep_day_df,
+                weight_log_df)
+
+# Finding Missing Values: Lambda function to find the sum of missing values
+# within each dataframe
+lapply(df_list,function(x) { length(which(is.na(x)))})
+
+# We determined that weight_log_df has 65 missing values. We apply the 
+# "length(which(is.na(x)))" to determine how many missing values are in each 
+# column
+lapply(weight_log_df,function(x) { length(which(is.na(x)))})
+
+# The missing values are only found in the Fat column. A possible explanation
+# is that individuals may not be equiped to measure their Fat percentage.
+# Thus leaving participants to enter no data for Fat percentage.
+weight_log_nas <- filter(weight_log_df, is.na(Fat))
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+# Duplicates
+# To filter duplicates, we will use a lambda function to group each record by ID
+# Applying a lambda function to obtain only distinct values
+df_list <- lapply(df_list,function(x) {unique(x)})
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+# Reformatting
+# Cleaning names
+df_list <- lapply(df_list,function(x) {clean_names(x)})
+
+#Converting the list of dataframes into separate dataframes using list2env
+names(df_list) <- paste("df", seq_along(df_list), sep = ".")
+list2env(df_list,envir=.GlobalEnv)
+
+daily_activity <- df.1
+daily_calories <- df.2
+daily_intensities <- df.3
+daily_steps <- df.4
+heart_rate <- df.5
+hourly_calories <- df.6
+hourly_intensities <- df.7
+hourly_steps <- df.8
+sleep_day <- df.9
+weight_log <- df.10
+
+rm(df.1,df.2,df.3,df.4,df.5,df.6,df.7,df.8,df.9,df.10)
+
+# Renaming ActivityDate column of daily_activity to ActivityDay to maintain 
+# naming consistency of within all daily datasets
+daily_activity <- daily_activity %>% rename(c("activity_date" = "activity_day"))
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+# Joining all daily data
+daily <- merge(merge(merge(
+  daily_activity,
+  daily_calories, all=TRUE),
+  daily_intensities, all=TRUE),
+  daily_steps, all=TRUE)
+
+# Joining all hourly data
+hourly <- merge(merge(
+  hourly_calories,
+  hourly_intensities, all=TRUE),
+  hourly_steps, all=TRUE)
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+# Converting daily$ActivityDay and hourly$ActivityHour from chr to datetime &
+# hms and deleting unnecessary columns
+daily <- daily %>%
+  mutate(date = mdy(activity_day)) %>%
+  mutate(day_of_week = weekdays(date)) %>%
+  select(-"activity_day",-"tracker_distance",-"step_total")
+daily <- daily[, c(1,14,15,2:13)]
+
+hourly <- hourly %>%
+  mutate(activity_hour = mdy_hms(activity_hour)) %>%
+  mutate(day_of_week = weekdays(activity_hour)) %>%
+  separate(activity_hour, into = c("date_str","time_str"), sep = " ") %>%
+  mutate(date = ymd(date_str)) %>%
+  mutate(time = as_hms(time_str)) %>%
+  select(-"date_str", -"time_str")
+hourly <- hourly[, c(1,7,6,8,2:5)]
+  
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+#Converting Datetime for heart_rate, sleep_day, and weight_log
+heart_rate <- heart_rate %>%
+  mutate(activity_hour = mdy_hms(time)) %>%
+  mutate(day_of_week = weekdays(activity_hour)) %>%
+  separate(activity_hour, into = c("date_str","time_str"), sep = " ") %>%
+  mutate(date = ymd(date_str)) %>%
+  mutate(time = as_hms(time_str)) %>%
+  select(-"date_str",-"time_str")
+heart_rate <- heart_rate[, c(1, 5, 4, 2:3)]
+
+sleep_day <- sleep_day %>%
+  mutate(activity_hour = mdy_hms(sleep_day)) %>%
+  mutate(day_of_week = weekdays(activity_hour)) %>%
+  mutate(date = ymd(activity_hour)) %>%
+  select(-"activity_hour", -"sleep_day")
+sleep_day <- sleep_day[, c(1, 6, 5, 4, 2:3)]
+
+weight_log <- weight_log %>%
+  mutate(activity_hour = mdy_hms(date)) %>%
+  mutate(day_of_week = weekdays(activity_hour)) %>%
+  separate(activity_hour, into = c("date_str","time_str"), sep = " ") %>%
+  mutate(date = ymd(date_str)) %>%
+  mutate(time = as_hms(time_str)) %>%
+  select(-"date_str",-"time_str")
+weight_log <- weight_log[, c(1, 2, 9, 10, 3:8)]
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+#Data Exploration
+#Determine summary stats of every dataframe
+
+daily_summary <- daily %>%
+  select(-"id",-"date",-"day_of_week") %>%
+  summary() 
+print(daily_summary)
+print(n_unique(daily$id))
+hourly_summary <- hourly %>%
+  select(-"id",-"date",-"day_of_week", -"time") %>%
+  summary() 
+print(hourly_summary)
+print(n_unique(hourly$id))
+
+heart_rate_summary <- heart_rate %>%
+  select("value") %>%
+  summary() 
+print(heart_rate_summary)
+print(n_unique(heart_rate$id))
+
+sleep_day_summary <- sleep_day %>%
+  select(-"id",-"date",-"day_of_week") %>%
+  summary() 
+print(sleep_day_summary)
+print(n_unique(sleep_day$id))
+
+weight_log_summary <- weight_log %>%
+  select(-"id",-"date",-"day_of_week", - "time", -"is_manual_report") %>%
+  summary() 
+print(weight_log_summary)
+print(n_unique(weight_log$id))
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+#Determining what users are using
+# Generate 4 sets of unique Ids for each feature.
+step_ids <- unique(daily$id, incomparables = FALSE)
+sleep_ids <- unique(sleep_day$id, incomparables = FALSE)
+heartrate_ids <- unique(heart_rate$id, incomparables = FALSE)
+weight_ids <- unique(weight_log$id, incomparables = FALSE)
+# Plot
+venn.diagram(x = list(step_ids, sleep_ids, heartrate_ids, weight_ids), 
+             category.names = c("Steps count", "Sleep monitor", "Heart monitor",
+                                "Weight tracking"),
+             filename = "features_venn.png",
+             output=TRUE, imagetype="png",
+             lwd = 2, fill = c("skyblue", "pink1", "mediumorchid", "orange"),
+             cex = 1, fontface = "bold", fontfamily = "sans",
+             cat.cex = .7, cat.fontface = "bold", cat.default.pos = "outer",
+             cat.fontfamily = "sans")
+
+# From our Venn Diagram, we can identify that all 33 users from the study 
+# implement the step counting feature and is by far the most popular feature 
+# based on the current dataset. The sleep mon
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# Creating Histograms of Daily Activity
+
+# relationship of how many steps you take a day vs how many mintues you spend sitting
+ggplot(data=daily, aes(x=total_steps, y=sedentary_minutes)) + geom_point()
+
+# relationship of how many minutes you're asleep vs how many minutes you're in bed
+ggplot(data=sleep_day, aes(x=total_minutes_asleep, y=total_time_in_bed)) + geom_point()
+
+# Daily plots
+# Relationship with calories & Activity
+ggplot(data=daily, aes(x=total_steps, y=sedentary_minutes)) + geom_point()
+
+ggplot(data=daily, aes(x=very_active_distance)) + geom_histogram()
+# Relationship with calories & steps
+# Relationship with calories & Day of the week
+# Relationship with Activity & Day of the week
+# Relationship with Activity & Minutes Spent
+# Difference with Activity distances & Minutes
+
+#Hourly plots
+# Time & DAY vs Total Intensity or Step Total or Average Intensity
+# Relationship with heart rate by the hour
+
+#Sleep Day
+# Relationship of DayOfWeek with Total TimeInBed and TotalMinutesAsleep
+# Relationship of TotalSleepRecords
+# Relationship of sleep & activities
+# Relaitonship of sleep & calorie usage
+
+# Weight_log
+# Weight and usage
+# Weight and activity
+# Weight and calories
+
+########################
+
+#daily usage
+
+# Merge the two dfs (step_sleep)
+daily_sleep <- merge(daily, sleep_day, by = c("id", "date", "day_of_week"))
+# There are replicates after merging dfs need to remove
+daily_sleep <- daily_sleep[!duplicated(daily_sleep), ]
+# Check data
+head(daily_sleep)
+nrow(daily_sleep)
+n_unique(daily_sleep$id)
+
+#####################
+
+#daily_sleep_hist  <- daily_sleep %>% select(-c("id", "total_sleep_records")) %>% plot_histogram(ggtheme = theme_light())
+#options(repr.plot.width = 20, repr.plot.height = 20)
+
+daily_sleep %>% select(c("very_active_minutes", "very_active_distance")) %>% plot_histogram(ggtheme = theme_light())
+#options(repr.plot.width = 20, repr.plot.height = 20)
+# "very_active_minutes" and "very_active_distance" are both positively  skewed
+
+daily_sleep %>% select(c("fairly_active_minutes", "moderately_active_distance")) %>% plot_histogram(ggtheme = theme_light())
+#options(repr.plot.width = 20, repr.plot.height = 20)
+# "fairly_active_minutes" & "moderately_active_distance" are both positively skewed
+
+daily_sleep %>% select(c("lightly_active_minutes", "light_active_distance")) %>% plot_histogram(ggtheme = theme_light())
+#options(repr.plot.width = 20, repr.plot.height = 20)
+# pretty equal/normal
+
+daily_sleep %>% select(c("sedentary_minutes", "sedentary_active_distance")) %>% plot_histogram(ggtheme = theme_light())
+#options(repr.plot.width = 20, repr.plot.height = 20)
+# minutes normal, distance positively skewed
+
+daily_sleep %>% select(c("total_steps", "total_distance")) %>% plot_histogram(ggtheme = theme_light())
+#options(repr.plot.width = 20, repr.plot.height = 20)
+# positively skewed
+
+daily_sleep %>% select(c("total_time_in_bed", "total_minutes_asleep")) %>% plot_histogram(ggtheme = theme_light())
+#options(repr.plot.width = 20, repr.plot.height = 20)
+# normal
+
+daily_sleep %>% select(c("calories")) %>% plot_histogram(ggtheme = theme_light()) 
+#options(repr.plot.width = 20, repr.plot.height = 20)
+# positively skewed
+
+#########################
+
+# Get number of users used their devices each day:
+obs_users <- daily_sleep %>% group_by(date) %>% 
+  dplyr::summarise(user_perday = sum(n()), .groups = "drop")
+head(obs_users)
+
+#Plot a calendar heat map on total steps by day
+calendarPlot(obs_users, pollutant = "user_perday", year = 2016, month = 4:5,  cex.lim = c(0.6, 1), main = "Number of Users Used Devices by Day", cols="increment", key.header = "Number of Users", key.position = "right")
+options(repr.plot.width = 14, repr.plot.height = 10)
+
+# Summary of users per day
+summary(obs_users$user_perday)
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+# Get number of days a user used their device in a 31 day period:
+obs_days <- daily_sleep %>% group_by(id) %>% 
+  dplyr::summarise(num_dayuse = sum(n()), .groups = "drop") %>% 
+  arrange(-num_dayuse)
+summary(obs_days$num_dayuse)
+
+# Classify users into usage ranges
+usage <- obs_days %>% 
+  mutate(group = case_when(
+    between(num_dayuse, 1, 10) ~ "low usage",
+    between(num_dayuse, 11, 20) ~ "moderate usage",
+    between(num_dayuse, 21, 31) ~ "high usage",
+    TRUE ~ NA_character_
+  ))
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+# Create a df with new attributes
+usage_df <- daily_sleep %>% 
+  left_join(usage, by = "id")
+# Compute percentage of each usage groups 
+sum_usage <- usage %>% 
+  mutate(group = fct_relevel(group, c("high usage", "moderate usage", "low usage"))) %>% 
+  group_by(group) %>%  
+  dplyr::summarise(num_users = n()) %>% 
+  mutate(percent = num_users/sum(num_users)*100)
+
+#Create Table
+print(sum_usage)
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+# Summarise Active minutes by days
+active1 <- usage_df %>% 
+  group_by(group) %>% 
+  dplyr::summarise(very_active = round(mean(very_active_minutes),0),
+            fairly_active = round(mean(fairly_active_minutes),0), .groups = "drop")
+
+# Reshape data 
+active1_long <- gather(data = active1, key = "variables", value = "value", -group)
+# Plot very active and fairly active minutes per day
+active1_long %>% 
+  ggplot()+ geom_col(aes(x= group, y=value, group=variables, fill=variables))+
+  theme(axis.text.x = element_text(size = 9))+
+  labs(x="Group of users" , y="Minutes")+
+  ggtitle("Comparison of Average Active Minutes")
+options(repr.plot.width = 8, repr.plot.height = 5)
+
+# Get data for average activities on a day scale
+usage_hr <- usage_df %>% group_by(group, date, id, day_of_week) %>% 
+  mutate(total_mins = sum(very_active_minutes, fairly_active_minutes, lightly_active_minutes, total_time_in_bed)) %>%
+  dplyr::summarise(steps = round(mean(total_steps),0),
+            distance = round(mean(total_distance),0),
+            very_active = round(mean(very_active_minutes),0),
+            fairly_active = round(mean(fairly_active_minutes),0),
+            lightly_active = round(mean(lightly_active_minutes),0),
+            sedentary_hr = round(mean(sedentary_minutes)/60,2),
+            bed_hr = round(mean(total_time_in_bed)/60,2),
+            asleep_hr = round(mean(total_minutes_asleep)/60,2),
+            avg_hr = round(sum(very_active_minutes, fairly_active_minutes, lightly_active_minutes, total_time_in_bed)/60,2), .groups = "drop")
+head(usage_hr)
+
+# Compare user groups by their average very active minutes
+# Summarise Active minutes by groups
+active <- usage_hr %>% 
+  group_by(group, id) %>% 
+  dplyr::summarise(very_active = round(mean(very_active),0),
+            fairly_active = round(mean(fairly_active),0), 
+            .groups = "drop")
+# Reshape data 
+active_long <- gather(data = active, key = "variables", value = "value", -c(group, id))
+# Plot data
+ggplot(active_long, aes(group, value, fill=group))+
+  geom_boxplot(show.legend = TRUE)+
+  geom_hline(yintercept = mean(active_long$value), color = "blue")+
+  xlab("Groups of User") + ylab("Minutes") +
+  ggtitle("Comparison of User Groups by Active Minutes", "Average Active Minutes = 18'")+
+  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())+
+  theme(legend.position = "top")+
+  facet_wrap(~variables)
+options(repr.plot.width = 12, repr.plot.height = 6)
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+# Summarise Active minutes by days
+active2 <- usage_df %>% 
+  group_by(day_of_week, group) %>% 
+  dplyr::summarise(very_active = round(mean(very_active_minutes),0),
+            fairly_active = round(mean(fairly_active_minutes),0),.groups = "drop")
+# Reshape data 
+active2_long <- gather(data = active2, key = "variables", value = "value", -c(group,day_of_week))
+# Plot data
+active2_long %>% mutate(day_week = fct_relevel(day_of_week,c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))) %>% 
+  ggplot()+ geom_col(aes(x= day_week, y=value, fill=variables))+
+  theme(axis.text.x = element_text(size = 11, angle = 60, hjust = 1, vjust = 1))+
+  theme(legend.position = "top")+
+  labs(x="Days" , y="Minutes")+
+  ggtitle("Comparison of Active Mins", "By Groups, Days and Levels")+
+  facet_grid(variables~group)
+options(repr.plot.width = 14, repr.plot.height = 6)
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+#low active vs active
+lightly <- usage_hr %>% 
+  group_by(group, id) %>% 
+  dplyr::summarise(lightly_hr = round(mean(lightly_active)/60,2),.groups = "drop")
+low_ints <- usage_hr %>% 
+  group_by(group, id) %>% 
+  dplyr::summarise(lightly_hr = round(mean(lightly_active)/60,2),
+            sedentary_hr = round(mean(sedentary_hr),0), .groups = "drop")
+# Reshape data 
+low_ints_long <- gather(data = low_ints, key = "variables", value = "value", -c(group, id))
+# Plot lightly active minutes per day
+ggplot(low_ints_long, aes(group, value, fill=group))+
+  geom_boxplot(show.legend = TRUE)+
+  xlab("Groups of Users") + ylab("Hours") +
+  ggtitle("Comparison by Lightly Active / Sedentary")+
+  theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+
+  facet_wrap(~variables)
+options(repr.plot.width = 14, repr.plot.height = 8)
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+# Summarise Active minutes by days
+low2 <- usage_df %>% 
+  group_by(day_of_week, group) %>% 
+  dplyr::summarise(lightly_active = round(mean(lightly_active_minutes),0),
+            sedentary = round(mean(sedentary_minutes),0),.groups = "drop")
+# Reshape data 
+low2_long <- gather(data = low2, key = "variables", value = "value", -c(group,day_of_week))
+# Plot data
+low2_long %>% mutate(day_week = fct_relevel(day_of_week,c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))) %>% 
+  ggplot()+ geom_col(aes(x= day_week, y=value, fill=variables))+
+  theme(axis.text.x = element_text(size = 11, angle = 60, hjust = 1, vjust = 1))+
+  theme(legend.position = "top")+
+  labs(x="Days" , y="Minutes")+
+  ggtitle("Comparison of Low and Inactive Hours", "By Groups, Days and Levels")+
+  facet_grid(variables~group)
+options(repr.plot.width = 14, repr.plot.height = 6)
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+# Bed Rest BoxPlot
+
+
+# Bed Rest by groups
+bed_ints <- usage_hr %>% 
+  group_by(group, id) %>% 
+  dplyr::summarise(bed_hr = round(mean(bed_hr),0),
+            asleep_hr = round(mean(asleep_hr),0), .groups = "drop")
+# Reshape data 
+bed_ints_long <- gather(data = bed_ints, key = "variables", value = "value", -c(group, id))
+# Plot lightly active minutes per day
+ggplot(bed_ints_long, aes(group, value, fill=group))+
+  geom_boxplot(show.legend = TRUE)+
+  xlab("Groups of Users") + ylab("Hours") +
+  ggtitle("Comparison by Bed Rest Hours")+
+  theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+
+  facet_wrap(~variables)
+options(repr.plot.width = 14, repr.plot.height = 8)
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+# Summarise Active minutes by days
+bed2 <- usage_hr %>% 
+  group_by(day_of_week, group) %>% 
+  dplyr::summarise(bed_hr = round(mean(bed_hr),0),
+                   asleep_hr = round(mean(asleep_hr),0),.groups = "drop")
+# Reshape data 
+bed2_long <- gather(data = bed2, key = "variables", value = "value", -c(group,day_of_week))
+# Plot data
+bed2_long %>% mutate(day_week = fct_relevel(day_of_week,c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))) %>% 
+  ggplot()+ geom_col(aes(x= day_week, y=value, fill=variables))+
+  theme(axis.text.x = element_text(size = 11, angle = 60, hjust = 1, vjust = 1))+
+  theme(legend.position = "top")+
+  labs(x="Days" , y="Minutes")+
+  ggtitle("Comparison of Bed and Asleep Hours", "By Groups, Days and Levels")+
+  facet_grid(variables~group)
+options(repr.plot.width = 14, repr.plot.height = 6)
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# What Are the Average Steps Per Hour for Different Groups?
+
+# Merging hourly data to daily step/sleep data
+step_sleephour <- merge(hourly, usage_df, by = c("id", "date", "day_of_week"))
+# Remove duplicates if any
+step_sleephour <- step_sleephour[!duplicated(step_sleephour), ]
+# Check data
+head(step_sleephour,3)
+nrow(step_sleephour)
+n_unique(step_sleephour$id)
+
+## prepare data
+stephr_gr <- step_sleephour %>% 
+  mutate(hr = format(parse_date_time(as.character(time), "HMS"), format = "%H:%M"),
+         day_week = fct_relevel(day_of_week,
+                                c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))) %>% 
+  group_by(hr, day_week, group) %>%
+  dplyr::summarise(steps = mean(step_total), .groups = "drop")
+# Plot distribution
+stephr_graph <- ggplot(stephr_gr, aes(x=hr, y=steps, fill = steps))+ 
+  scale_fill_gradient(low = "green", high = "red")+
+  geom_bar(stat = 'identity', show.legend = TRUE) +
+  coord_flip() +
+  ggtitle("Steps By Hours", "All user groups") +
+  xlab("Hour") + ylab("Steps") +
+  theme(axis.text.x = element_text(size=6), axis.text.y = element_text(size=5))+
+  theme(legend.position = "top")+
+  facet_grid(group~day_week)
+options(repr.plot.width = 14, repr.plot.height = 10)
+stephr_graph
+
+# What Are the Average Intensity Levels Per Hour for Different Groups?
+avg_intensity_hr_gr <- step_sleephour %>% 
+  mutate(hr = format(parse_date_time(as.character(time), "HMS"), format = "%H:%M"),
+         day_week = fct_relevel(day_of_week,
+                                c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))) %>% 
+  group_by(hr, day_week, group) %>%
+  dplyr::summarise(avg_intensity = mean(average_intensity), .groups = "drop")
+
+avg_intensity_hr_graph <- ggplot(avg_intensity_hr_gr, aes(x=hr, y=avg_intensity, fill = avg_intensity))+ 
+  scale_fill_gradient(low = "yellow", high = "purple")+
+  geom_bar(stat = 'identity', show.legend = TRUE) +
+  coord_flip() +
+  ggtitle("Intensity by Hours", "All user groups") +
+  xlab("Hour") + ylab("Average Intensity") +
+  theme(axis.text.x = element_text(size=6), axis.text.y = element_text(size=5))+
+  theme(legend.position = "top")+
+  facet_grid(group~day_week)
+options(repr.plot.width = 14, repr.plot.height = 10)
+avg_intensity_hr_graph
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# Scatter plot correlation between intensity/steps
+ints_step <- step_sleephour %>% 
+  group_by(group, id, date) %>% 
+  dplyr::summarise(intensity = round(mean(total_intensity),0),
+            steps = round(mean(step_total),2), .groups = "drop") %>% 
+  ggplot(aes(x= intensity, y = steps, color = group, show.legend = FALSE))+ 
+  geom_point(size = 1)+
+  geom_smooth(method = 'loess', formula = y ~ x)+
+  stat_cor(aes(label = ..r.label..), label.x = 10)+
+  labs(x="Intensity levels" , y="Steps")+
+  ggtitle("Correlation of Instensity and Steps", "By Groups and Levels")+
+  facet_wrap(~group)
+options(repr.plot.width = 14, repr.plot.height = 8)
+ints_step
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# Scatter plot correlation between intensity/distance
+ints_dist <- step_sleephour %>% 
+  group_by(group, id, date) %>% 
+  dplyr::summarise(intensity = round(mean(total_intensity),0),
+                   distance = round(mean(total_distance),2), .groups = "drop") %>% 
+  ggplot(aes(x= intensity, y = distance, color = group, show.legend = FALSE))+ 
+  geom_point(size = 1)+
+  geom_smooth(method = 'loess', formula = y ~ x)+
+  stat_cor(aes(label = ..r.label..), label.x = 10)+
+  labs(x="Intensity levels" , y="Distance")+
+  ggtitle("Correlation of Instensity and Distance", "By Groups and Levels")+
+  facet_wrap(~group)
+options(repr.plot.width = 14, repr.plot.height = 8)
+ints_dist
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# Scatter plot correlation between steps/calories
+ints_cal <- step_sleephour %>% 
+  group_by(group, id, date) %>%  
+  dplyr::summarise(steps = round(mean(total_steps ),0),
+                   calories = round(mean(calories.x),2), .groups = "drop") %>% 
+  ggplot(aes(x= steps, y = calories, color = group, show.legend = FALSE))+ 
+  geom_point(size = 1)+
+  geom_smooth(method = 'loess', formula = y ~ x)+
+  stat_cor(aes(label = ..r.label..), label.x = 10)+
+  labs(x="Steps" , y="Calories")+
+  ggtitle("Correlation of Steps and Calories", "By Groups and Levels")+
+  facet_wrap(~group)
+options(repr.plot.width = 14, repr.plot.height = 8)
+ints_cal
+
